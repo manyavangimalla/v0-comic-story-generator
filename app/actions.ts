@@ -85,7 +85,7 @@ const templateStories = {
         narrative: "When Mom came home, Alex told her exactly what happened. His voice was shaky but honest.",
         dialogue: "Mom, I'm sorry. I broke your vase while playing ball inside.",
         imagePrompt: "A boy confessing to his mother, looking apologetic, mother listening calmly",
-        character: "Alex",
+        character: "Mom",
       },
       {
         panelNumber: 4,
@@ -543,98 +543,31 @@ async function callNvidiaAPI(prompt: string, modelName = "nvidia/nemotron-mini-4
   return result.choices[0]?.message?.content || ""
 }
 
-export async function generateComicImage(imagePrompt: string) {
-  const HF_API_KEY = process.env.HUGGINGFACE_API_KEY
+async function generateImageWithPollinations(prompt: string) {
+  console.log("[v0] Using Pollinations.ai for free image generation")
+  console.log("[v0] Generating image for:", prompt.substring(0, 50))
 
-  if (!HF_API_KEY) {
-    console.log("[v0] No Hugging Face API key, using placeholder")
-    return null
-  }
+  // Pollinations.ai - Free AI image generation, no API key required
+  const enhancedPrompt = `${prompt}, Ghibli-inspired style, colorful, kid-friendly, comic book illustration, vibrant colors, whimsical, educational, cartoon style`
 
-  try {
-    console.log("[v0] Generating image with Stable Diffusion XL")
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=700&height=400&model=flux&nologo=true&enhance=true`
 
-    const response = await fetch(
-      "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${HF_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: `Comic book style illustration: ${imagePrompt}. Colorful, kid-friendly, cartoon art style with bold outlines, Ghibli-inspired aesthetic, vibrant colors, whimsical and cheerful.`,
-          parameters: {
-            negative_prompt: "dark, scary, violent, inappropriate, realistic, photographic, horror, gore",
-            num_inference_steps: 30,
-            guidance_scale: 7.5,
-          },
-        }),
-      },
-    )
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[v0] Hugging Face image generation failed:", response.status, errorText)
-      return null
-    }
-
-    // Hugging Face returns the image as a blob
-    const imageBlob = await response.blob()
-
-    // Convert blob to base64 data URL
-    const arrayBuffer = await imageBlob.arrayBuffer()
-    const base64 = Buffer.from(arrayBuffer).toString("base64")
-
-    console.log("[v0] Image generated successfully with SDXL")
-    return `data:image/png;base64,${base64}`
-  } catch (error) {
-    console.error("[v0] Error generating image with Hugging Face:", error)
-    return null
-  }
+  console.log("[v0] Image URL generated")
+  return imageUrl
 }
 
-async function callHuggingFace(prompt: string, model: string) {
-  const HF_API_KEY = process.env.HUGGINGFACE_API_KEY
-
-  if (!HF_API_KEY) {
-    throw new Error("HUGGINGFACE_API_KEY environment variable is not set")
+export async function generateComicImage(imagePrompt: string) {
+  try {
+    console.log("[v0] Generating image with Pollinations.ai (free, no API key needed)")
+    const imageUrl = await generateImageWithPollinations(imagePrompt)
+    console.log("[v0] Image generation complete")
+    return imageUrl
+  } catch (error) {
+    console.error("[v0] Error generating image, using placeholder:", error)
+    // Fallback to placeholder if something goes wrong
+    const shortPrompt = imagePrompt.substring(0, 50)
+    return `https://placehold.co/700x400/e0f2fe/1e40af?text=${encodeURIComponent(shortPrompt)}`
   }
-
-  console.log("[v0] Calling Hugging Face API with model:", model)
-
-  const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${HF_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      inputs: prompt,
-      parameters: {
-        max_new_tokens: 2000,
-        temperature: 0.8,
-        top_p: 0.95,
-        return_full_text: false,
-      },
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    console.error("[v0] Hugging Face API error:", error)
-    throw new Error(`Hugging Face API error: ${response.status} - ${error}`)
-  }
-
-  const result = await response.json()
-  console.log("[v0] API response type:", typeof result, Array.isArray(result))
-
-  // Handle different response formats
-  if (Array.isArray(result)) {
-    return result[0]?.generated_text || result[0]?.text || ""
-  }
-
-  return result.generated_text || result[0]?.generated_text || ""
 }
 
 export async function generateComicStory(theme: string, modelId = "nvidia/nemotron-mini-4b-instruct") {
@@ -666,35 +599,57 @@ Make it colorful, positive, and age-appropriate. The story should have a clear b
 Respond ONLY with the JSON object, no additional text.`
 
   try {
-    console.log("[v0] Generating story with model:", modelId)
+    console.log("[v0] Generating story with NVIDIA model:", modelId)
 
-    let text: string
+    // Map the model ID to the correct NVIDIA API model name
+    let nvidiaModelName = "nvidia/nemotron-mini-4b-instruct"
 
-    if (modelId.toLowerCase().includes("nvidia/")) {
-      // Map the model ID to the correct NVIDIA API model name
-      let nvidiaModelName = "nvidia/nemotron-mini-4b-instruct"
-
-      if (modelId.toLowerCase().includes("llama-3.3-nemotron-super")) {
-        nvidiaModelName = "nim/nvidia/llama-3.3-nemotron-super-49b-v1"
-      } else if (modelId.toLowerCase().includes("nemotron-mini")) {
-        nvidiaModelName = "nvidia/nemotron-mini-4b-instruct"
-      }
-
-      text = await callNvidiaAPI(prompt, nvidiaModelName)
-    } else {
-      text = await callHuggingFace(prompt, modelId)
+    if (modelId.toLowerCase().includes("llama-3.3-nemotron-super")) {
+      nvidiaModelName = "nim/nvidia/llama-3.3-nemotron-super-49b-v1"
+    } else if (modelId.toLowerCase().includes("nemotron-mini")) {
+      nvidiaModelName = "nvidia/nemotron-mini-4b-instruct"
     }
+
+    const text = await callNvidiaAPI(prompt, nvidiaModelName)
 
     console.log("[v0] Received response:", text.substring(0, 200))
 
-    // Parse the JSON response
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       console.error("[v0] Failed to find JSON in response, using template fallback")
       throw new Error("No JSON found in response")
     }
 
-    const result = JSON.parse(jsonMatch[0])
+    let jsonString = jsonMatch[0]
+    let result
+
+    // Try parsing directly first
+    try {
+      result = JSON.parse(jsonString)
+      console.log("[v0] Successfully parsed JSON directly")
+    } catch (parseError) {
+      // If direct parsing fails, try cleaning the JSON
+      console.log("[v0] Direct parse failed, attempting to clean JSON")
+
+      // Only clean if there are actual control characters that need escaping
+      // This preserves already-escaped characters
+      jsonString = jsonString.replace(/[\x00-\x1F]/g, (char) => {
+        // Replace control characters with their escaped equivalents
+        switch (char) {
+          case "\n":
+            return "\\n"
+          case "\r":
+            return "\\r"
+          case "\t":
+            return "\\t"
+          default:
+            return "" // Remove other control characters
+        }
+      })
+
+      console.log("[v0] Cleaned JSON, attempting parse again")
+      result = JSON.parse(jsonString)
+    }
 
     if (!result.title || !result.panels || !Array.isArray(result.panels)) {
       throw new Error("Invalid story format")

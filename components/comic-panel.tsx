@@ -24,21 +24,20 @@ export function ComicPanel({ panel, generatedImage }: ComicPanelProps) {
         </div>
 
         <div className="relative aspect-[4/3] bg-gradient-to-br from-secondary/30 via-lavender/20 to-accent/30 rounded-3xl border-2 border-primary/20 overflow-hidden shadow-lg">
-          {generatedImage ? (
-            <Image src={generatedImage || "/placeholder.svg"} alt={panel.imagePrompt} fill className="object-cover" />
-          ) : (
-            <Image
-              src={`/.jpg?height=400&width=500&query=${encodeURIComponent(panel.imagePrompt)}`}
-              alt={panel.imagePrompt}
-              fill
-              className="object-cover"
-            />
-          )}
+          <Image
+            src={
+              generatedImage || `/placeholder.svg?height=400&width=700&query=${encodeURIComponent(panel.imagePrompt)}`
+            }
+            alt={panel.imagePrompt}
+            fill
+            className="object-cover"
+            unoptimized
+          />
 
           {/* Thought bubble overlay */}
           {panel.dialogue && (
-            <div className="absolute top-2 right-2 max-w-[45%] z-10">
-              <div className="thought-bubble-cloud bg-white/95 backdrop-blur-sm rounded-[50%] p-3 shadow-xl border-2 border-primary/30 relative">
+            <div className="absolute top-3 left-3 max-w-[32%] z-10">
+              <div className="thought-bubble-cloud bg-white/95 backdrop-blur-sm rounded-[50%] p-2.5 shadow-xl border-2 border-primary/30 relative">
                 <p className="text-xs md:text-sm text-foreground/90 font-medium text-center leading-tight">
                   {panel.dialogue}
                 </p>
