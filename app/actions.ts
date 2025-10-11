@@ -525,8 +525,8 @@ async function callNvidiaAPI(prompt: string, modelName = "nvidia/nemotron-mini-4
           content: prompt,
         },
       ],
-      temperature: 0.8,
-      top_p: 0.95,
+      temperature: 1.0,
+      top_p: 0.98,
       max_tokens: 2000,
     }),
   })
@@ -547,10 +547,10 @@ async function generateImageWithPollinations(prompt: string) {
   console.log("[v0] Using Pollinations.ai for free image generation")
   console.log("[v0] Generating image for:", prompt.substring(0, 50))
 
-  // Pollinations.ai - Free AI image generation, no API key required
   const enhancedPrompt = `${prompt}, Ghibli-inspired style, colorful, kid-friendly, comic book illustration, vibrant colors, whimsical, educational, cartoon style`
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=700&height=400&model=flux&nologo=true&enhance=true`
+  const timestamp = Date.now()
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=700&height=400&model=flux&nologo=true&enhance=true&seed=${timestamp}`
 
   console.log("[v0] Image URL generated")
   return imageUrl
@@ -564,8 +564,7 @@ export async function generateComicImage(imagePrompt: string) {
     return imageUrl
   } catch (error) {
     console.error("[v0] Error generating image, using placeholder:", error)
-    // Fallback to placeholder if something goes wrong
-    const shortPrompt = imagePrompt.substring(0, 50)
+    const shortPrompt = imagePrompt ? imagePrompt.substring(0, 50) : "Comic Panel"
     return `https://placehold.co/700x400/e0f2fe/1e40af?text=${encodeURIComponent(shortPrompt)}`
   }
 }
@@ -573,7 +572,49 @@ export async function generateComicImage(imagePrompt: string) {
 export async function generateComicStory(theme: string, modelId = "nvidia/nemotron-mini-4b-instruct") {
   const themeDescription = themePrompts[theme as keyof typeof themePrompts] || themePrompts.kindness
 
-  const storyContext = `Create an educational comic story for children (ages 6-10) about ${themeDescription}.`
+  const randomCharacterNames = [
+    "Alex",
+    "Maya",
+    "Sam",
+    "Jordan",
+    "Riley",
+    "Casey",
+    "Taylor",
+    "Morgan",
+    "Avery",
+    "Quinn",
+    "Skylar",
+    "Rowan",
+    "Sage",
+    "River",
+    "Phoenix",
+    "Dakota",
+  ]
+
+  const randomSettings = [
+    "a small village",
+    "a bustling city",
+    "a peaceful town",
+    "a coastal community",
+    "a mountain village",
+    "a forest settlement",
+    "a desert town",
+    "a lakeside community",
+  ]
+
+  const randomCharacter = randomCharacterNames[Math.floor(Math.random() * randomCharacterNames.length)]
+  const randomSetting = randomSettings[Math.floor(Math.random() * randomSettings.length)]
+  const timestamp = Date.now()
+
+  const storyContext = `Create a UNIQUE and ORIGINAL educational comic story for children (ages 6-10) about ${themeDescription}.
+
+IMPORTANT: Create a completely NEW and DIFFERENT story. Do NOT repeat previous stories.
+
+Story requirements:
+- Main character name: ${randomCharacter}
+- Setting: ${randomSetting}
+- Story ID: ${timestamp}
+- Make this story unique with fresh plot, different challenges, and new lessons`
 
   const prompt = `${storyContext}
 
@@ -601,7 +642,6 @@ Respond ONLY with the JSON object, no additional text.`
   try {
     console.log("[v0] Generating story with NVIDIA model:", modelId)
 
-    // Map the model ID to the correct NVIDIA API model name
     let nvidiaModelName = "nvidia/nemotron-mini-4b-instruct"
 
     if (modelId.toLowerCase().includes("llama-3.3-nemotron-super")) {
@@ -623,18 +663,13 @@ Respond ONLY with the JSON object, no additional text.`
     let jsonString = jsonMatch[0]
     let result
 
-    // Try parsing directly first
     try {
       result = JSON.parse(jsonString)
       console.log("[v0] Successfully parsed JSON directly")
     } catch (parseError) {
-      // If direct parsing fails, try cleaning the JSON
       console.log("[v0] Direct parse failed, attempting to clean JSON")
 
-      // Only clean if there are actual control characters that need escaping
-      // This preserves already-escaped characters
       jsonString = jsonString.replace(/[\x00-\x1F]/g, (char) => {
-        // Replace control characters with their escaped equivalents
         switch (char) {
           case "\n":
             return "\\n"
@@ -643,7 +678,7 @@ Respond ONLY with the JSON object, no additional text.`
           case "\t":
             return "\\t"
           default:
-            return "" // Remove other control characters
+            return ""
         }
       })
 

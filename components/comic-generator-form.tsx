@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Loader2, Wand2, Download, Share2, Check, Heart } from "lucide-react"
+import { Loader2, Wand2, Download, Share2, Check, Heart, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { generateComicStory, generateComicImage } from "@/app/actions"
 import { ComicPanel } from "@/components/comic-panel"
@@ -59,33 +59,23 @@ export interface LikedStory {
   timestamp: number
 }
 
+interface GeneratedStory {
+  id: string
+  title: string
+  theme: string
+  panels: ComicPanelData[]
+  images: Record<number, string | null>
+  timestamp: number
+  isLiked: boolean
+}
+
 export function ComicGeneratorForm() {
   const [selectedTheme, setSelectedTheme] = useState<string>("")
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [comicPanels, setComicPanels] = useState<ComicPanelData[]>([])
-  const [storyTitle, setStoryTitle] = useState<string>("")
+  const [generatedStories, setGeneratedStories] = useState<GeneratedStory[]>([])
   const [error, setError] = useState<string>("")
-  const [generatedImages, setGeneratedImages] = useState<Record<number, string | null>>({})
-  const [savedComics, setSavedComics] = useState<Array<{ title: string; theme: string; timestamp: number }>>([])
-  const [showHistory, setShowHistory] = useState(false)
-  const [isLiked, setIsLiked] = useState(false)
-  const [currentStoryId, setCurrentStoryId] = useState<string>("")
   const { toast } = useToast()
-
-  useEffect(() => {
-    if (storyTitle && comicPanels.length > 0) {
-      const storyId = `${storyTitle}-${selectedTheme}-${Date.now()}`
-      setCurrentStoryId(storyId)
-      checkIfLiked(storyId)
-    }
-  }, [storyTitle, comicPanels])
-
-  const checkIfLiked = (storyId: string) => {
-    const likedStories = JSON.parse(localStorage.getItem("likedStories") || "[]") as LikedStory[]
-    const isStoryLiked = likedStories.some((story) => story.title === storyTitle && story.theme === selectedTheme)
-    setIsLiked(isStoryLiked)
-  }
 
   const handleGenerate = async () => {
     if (!selectedTheme) return
@@ -93,18 +83,23 @@ export function ComicGeneratorForm() {
     console.log("[v0] Generating comic with theme:", selectedTheme, "model:", selectedModel)
 
     setIsGenerating(true)
-    setComicPanels([])
-    setStoryTitle("")
     setError("")
-    setGeneratedImages({})
-    setIsLiked(false)
 
     try {
       const result = await generateComicStory(selectedTheme, selectedModel)
-      setStoryTitle(result.title)
-      setComicPanels(result.panels)
 
-      saveToHistory()
+      const newStoryId = `${result.title}-${selectedTheme}-${Date.now()}`
+      const newStory: GeneratedStory = {
+        id: newStoryId,
+        title: result.title,
+        theme: selectedTheme,
+        panels: result.panels,
+        images: {},
+        timestamp: Date.now(),
+        isLiked: false,
+      }
+
+      setGeneratedStories((prev) => [newStory, ...prev])
 
       console.log("[v0] Starting image generation for all panels")
       const imagePromises = result.panels.map(async (panel) => {
@@ -117,7 +112,11 @@ export function ComicGeneratorForm() {
       images.forEach(({ panelNumber, image }) => {
         imageMap[panelNumber] = image
       })
-      setGeneratedImages(imageMap)
+
+      setGeneratedStories((prev) =>
+        prev.map((story) => (story.id === newStoryId ? { ...story, images: imageMap } : story)),
+      )
+
       console.log("[v0] Image generation complete")
     } catch (error) {
       console.error("[v0] Error generating comic:", error)
@@ -133,22 +132,21 @@ export function ComicGeneratorForm() {
     setSelectedModel(modelId)
   }
 
-  const handleDownload = () => {
-    // Create a rich text document content
-    let docContent = `${storyTitle}\n`
-    docContent += `${"=".repeat(storyTitle.length)}\n\n`
-    docContent += `Theme: ${themes.find((t) => t.id === selectedTheme)?.label}\n`
-    docContent += `Generated: ${new Date().toLocaleDateString()}\n\n`
+  const handleDownload = (story: GeneratedStory) => {
+    let docContent = `${story.title}\n`
+    docContent += `${"=".repeat(story.title.length)}\n\n`
+    docContent += `Theme: ${themes.find((t) => t.id === story.theme)?.label}\n`
+    docContent += `Generated: ${new Date(story.timestamp).toLocaleDateString()}\n\n`
     docContent += `${"=".repeat(50)}\n\n`
 
-    comicPanels.forEach((panel, index) => {
+    story.panels.forEach((panel, index) => {
       docContent += `Panel ${panel.panelNumber}: ${panel.title}\n`
       docContent += `${"-".repeat(40)}\n\n`
       docContent += `Scene Description:\n${panel.narrative}\n\n`
       docContent += `Character: ${panel.character}\n`
       docContent += `Dialogue: "${panel.dialogue}"\n\n`
       docContent += `Visual Description: ${panel.imagePrompt}\n\n`
-      if (index < comicPanels.length - 1) {
+      if (index < story.panels.length - 1) {
         docContent += `${"=".repeat(50)}\n\n`
       }
     })
@@ -156,53 +154,38 @@ export function ComicGeneratorForm() {
     docContent += `\n${"=".repeat(50)}\n`
     docContent += `The End\n\n`
     docContent += `This story was created with AI-powered storytelling technology.\n`
-    docContent += `Powered by NVIDIA Nemotron and Hugging Face.\n`
+    docContent += `Powered by NVIDIA Nemotron and Pollinations AI.\n`
 
-    // Create blob and download as .doc (RTF format that Word can open)
     const blob = new Blob([docContent], { type: "application/msword" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `${storyTitle.replace(/\s+/g, "-").toLowerCase()}.doc`
+    a.download = `${story.title.replace(/\s+/g, "-").toLowerCase()}.doc`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
-  const handleShare = async () => {
-    if (!storyTitle || comicPanels.length === 0) {
-      toast({
-        title: "No story to share",
-        description: "Please generate a story first before sharing!",
-        variant: "destructive",
-      })
-      return
-    }
+  const handleShare = async (story: GeneratedStory) => {
+    const shareText = `Check out this magical comic story: "${story.title}"!\n\nTheme: ${themes.find((t) => t.id === story.theme)?.label}\n\nCreated with AI-powered storytelling. 🎨✨`
 
-    const shareText = `Check out this magical comic story: "${storyTitle}"!\n\nTheme: ${themes.find((t) => t.id === selectedTheme)?.label}\n\nCreated with AI-powered storytelling. 🎨✨`
-
-    // Try Web Share API first
     if (navigator.share) {
       try {
         await navigator.share({
-          title: storyTitle,
+          title: story.title,
           text: shareText,
         })
-        console.log("[v0] Story shared successfully")
         toast({
           title: "Story shared!",
           description: "Your comic story has been shared successfully.",
         })
       } catch (error) {
-        // User cancelled or share failed
         if (error instanceof Error && error.name !== "AbortError") {
-          // If it's not a user cancellation, fall back to clipboard
           fallbackToClipboard(shareText)
         }
       }
     } else {
-      // Web Share API not supported, use clipboard
       fallbackToClipboard(shareText)
     }
   }
@@ -224,47 +207,50 @@ export function ComicGeneratorForm() {
     }
   }
 
-  const saveToHistory = () => {
-    const newComic = {
-      title: storyTitle,
-      theme: selectedTheme,
-      timestamp: Date.now(),
-    }
-    const updated = [newComic, ...savedComics].slice(0, 10)
-    setSavedComics(updated)
-    localStorage.setItem("comicHistory", JSON.stringify(updated))
-  }
-
-  const handleLike = () => {
+  const handleLike = (story: GeneratedStory) => {
     const likedStories = JSON.parse(localStorage.getItem("likedStories") || "[]") as LikedStory[]
 
-    if (isLiked) {
-      // Unlike: remove from liked stories
-      const updated = likedStories.filter((story) => !(story.title === storyTitle && story.theme === selectedTheme))
+    if (story.isLiked) {
+      const updated = likedStories.filter((s) => s.id !== story.id)
       localStorage.setItem("likedStories", JSON.stringify(updated))
-      setIsLiked(false)
+      setGeneratedStories((prev) => prev.map((s) => (s.id === story.id ? { ...s, isLiked: false } : s)))
       toast({
         title: "Removed from favorites",
         description: "Story removed from your liked list.",
       })
     } else {
-      // Like: add to liked stories
       const newLikedStory: LikedStory = {
-        id: currentStoryId,
-        title: storyTitle,
-        theme: selectedTheme,
-        panels: comicPanels,
-        images: generatedImages,
-        timestamp: Date.now(),
+        id: story.id,
+        title: story.title,
+        theme: story.theme,
+        panels: story.panels,
+        images: story.images,
+        timestamp: story.timestamp,
       }
       const updated = [newLikedStory, ...likedStories]
       localStorage.setItem("likedStories", JSON.stringify(updated))
-      setIsLiked(true)
+      setGeneratedStories((prev) => prev.map((s) => (s.id === story.id ? { ...s, isLiked: true } : s)))
       toast({
         title: "Added to favorites!",
         description: "Story saved to your liked list.",
       })
     }
+  }
+
+  const handleRemoveStory = (storyId: string) => {
+    setGeneratedStories((prev) => prev.filter((story) => story.id !== storyId))
+    toast({
+      title: "Story removed",
+      description: "The story has been removed from the list.",
+    })
+  }
+
+  const handleClearAll = () => {
+    setGeneratedStories([])
+    toast({
+      title: "All stories cleared",
+      description: "All generated stories have been removed.",
+    })
   }
 
   return (
@@ -343,47 +329,80 @@ export function ComicGeneratorForm() {
         )}
       </Card>
 
-      {storyTitle && (
-        <div className="space-y-6">
-          <div className="text-center bg-white/95 p-6 rounded-2xl border-4 border-foreground shadow-xl">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-2">{storyTitle}</h2>
-            <p className="text-muted-foreground text-lg mb-4">
-              A story about {themes.find((t) => t.id === selectedTheme)?.label.toLowerCase()}
-            </p>
+      {generatedStories.length > 0 && (
+        <div className="space-y-8">
+          <div className="flex items-center justify-between bg-white/95 p-4 rounded-2xl border-4 border-foreground shadow-xl">
+            <h2 className="text-2xl font-bold text-foreground">Generated Stories ({generatedStories.length})</h2>
+            <Button onClick={handleClearAll} variant="destructive" size="sm" className="border-2">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear All
+            </Button>
+          </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button
-                onClick={handleLike}
-                variant={isLiked ? "default" : "outline"}
-                size="lg"
-                className={`border-2 ${
-                  isLiked ? "bg-red-500 hover:bg-red-600 text-white border-red-600" : "bg-transparent hover:bg-red-50"
-                }`}
-              >
-                <Heart className={`w-4 h-4 mr-2 ${isLiked ? "fill-current" : ""}`} />
-                {isLiked ? "Liked" : "Like Story"}
-              </Button>
-              <Button onClick={handleDownload} variant="outline" size="lg" className="border-2 bg-transparent">
-                <Download className="w-4 h-4 mr-2" />
-                Download Story
-              </Button>
-              <Button onClick={handleShare} variant="outline" size="lg" className="border-2 bg-transparent">
-                <Share2 className="w-4 h-4 mr-2" />
-                Share Story
-              </Button>
+          {generatedStories.map((story) => (
+            <div key={story.id} className="space-y-6">
+              <div className="text-center bg-white/95 p-6 rounded-2xl border-4 border-foreground shadow-xl">
+                <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-2">{story.title}</h2>
+                <p className="text-muted-foreground text-lg mb-4">
+                  A story about {themes.find((t) => t.id === story.theme)?.label.toLowerCase()}
+                </p>
+
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Button
+                    onClick={() => handleLike(story)}
+                    variant={story.isLiked ? "default" : "outline"}
+                    size="lg"
+                    className={`border-2 ${
+                      story.isLiked
+                        ? "bg-red-500 hover:bg-red-600 text-white border-red-600"
+                        : "bg-transparent hover:bg-red-50"
+                    }`}
+                  >
+                    <Heart className={`w-4 h-4 mr-2 ${story.isLiked ? "fill-current" : ""}`} />
+                    {story.isLiked ? "Liked" : "Like Story"}
+                  </Button>
+                  <Button
+                    onClick={() => handleDownload(story)}
+                    variant="outline"
+                    size="lg"
+                    className="border-2 bg-transparent"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Story
+                  </Button>
+                  <Button
+                    onClick={() => handleShare(story)}
+                    variant="outline"
+                    size="lg"
+                    className="border-2 bg-transparent"
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share Story
+                  </Button>
+                  <Button
+                    onClick={() => handleRemoveStory(story.id)}
+                    variant="outline"
+                    size="lg"
+                    className="border-2 bg-transparent hover:bg-red-50 hover:border-red-500"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {story.panels.map((panel) => (
+                  <ComicPanel key={panel.panelNumber} panel={panel} generatedImage={story.images[panel.panelNumber]} />
+                ))}
+              </div>
+
+              <div className="text-center bg-white/95 p-6 rounded-2xl border-4 border-foreground shadow-xl">
+                <p className="text-xl font-bold text-foreground mb-2">The End! 🎉</p>
+                <p className="text-muted-foreground">Want another story? Choose a different theme above!</p>
+              </div>
             </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {comicPanels.map((panel) => (
-              <ComicPanel key={panel.panelNumber} panel={panel} generatedImage={generatedImages[panel.panelNumber]} />
-            ))}
-          </div>
-
-          <div className="text-center bg-white/95 p-6 rounded-2xl border-4 border-foreground shadow-xl">
-            <p className="text-xl font-bold text-foreground mb-2">The End! 🎉</p>
-            <p className="text-muted-foreground">Want another story? Choose a different theme above!</p>
-          </div>
+          ))}
         </div>
       )}
     </div>

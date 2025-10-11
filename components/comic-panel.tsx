@@ -20,7 +20,7 @@ export function ComicPanel({ panel, generatedImage }: ComicPanelProps) {
       {/* Panel Content */}
       <div className="p-3 space-y-2">
         <div className="bg-gradient-to-br from-muted/40 to-secondary/20 p-4 rounded-2xl border-2 border-primary/20">
-          <p className="text-base md:text-lg text-foreground/90 italic leading-relaxed font-serif">{panel.narrative}</p>
+          <p className="text-lg md:text-xl text-foreground/90 italic leading-relaxed font-serif">{panel.narrative}</p>
         </div>
 
         <div className="relative aspect-[4/3] bg-gradient-to-br from-secondary/30 via-lavender/20 to-accent/30 rounded-3xl border-2 border-primary/20 overflow-hidden shadow-lg">
@@ -38,7 +38,7 @@ export function ComicPanel({ panel, generatedImage }: ComicPanelProps) {
           {panel.dialogue && (
             <div className="absolute top-3 left-3 max-w-[32%] z-10">
               <div className="thought-bubble-cloud bg-white/95 backdrop-blur-sm rounded-[50%] p-2.5 shadow-xl border-2 border-primary/30 relative">
-                <p className="text-xs md:text-sm text-foreground/90 font-medium text-center leading-tight">
+                <p className="text-sm md:text-base text-foreground/90 font-medium text-center leading-tight">
                   {panel.dialogue}
                 </p>
                 {/* Thought bubble tail */}
