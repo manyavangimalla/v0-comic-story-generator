@@ -1,5 +1,5 @@
 import { ComicGeneratorForm } from "@/components/comic-generator-form"
-import { BookOpen, Sparkles, Cloud, Leaf, Zap, Cpu } from "lucide-react"
+import { BookOpen, Sparkles, Cloud, Leaf, Zap, Cpu, Heart } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -38,15 +38,23 @@ export default function Home() {
             </div>
           </div>
 
-          <Link href="/about">
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-2 border-primary/50 hover:bg-primary/10 bg-transparent"
-            >
-              Learn About This Project
-            </Button>
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link href="/liked">
+              <Button variant="outline" size="lg" className="border-2 border-red-500/50 hover:bg-red-50 bg-white/80">
+                <Heart className="w-4 h-4 mr-2 text-red-500" />
+                View Liked Stories
+              </Button>
+            </Link>
+            <Link href="/about">
+              <Button
+                variant="outline"
+                size="lg"
+                className="border-2 border-primary/50 hover:bg-primary/10 bg-white/80"
+              >
+                Learn About This Project
+              </Button>
+            </Link>
+          </div>
         </header>
 
         {/* Main Content */}

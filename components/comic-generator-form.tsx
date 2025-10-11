@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Loader2, Wand2, Download, Share2, Check } from "lucide-react"
+import { Loader2, Wand2, Download, Share2, Check, Heart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { generateComicStory, generateComicImage } from "@/app/actions"
 import { ComicPanel } from "@/components/comic-panel"
@@ -50,6 +50,15 @@ export interface ComicPanelData {
   character: string
 }
 
+export interface LikedStory {
+  id: string
+  title: string
+  theme: string
+  panels: ComicPanelData[]
+  images: Record<number, string | null>
+  timestamp: number
+}
+
 export function ComicGeneratorForm() {
   const [selectedTheme, setSelectedTheme] = useState<string>("")
   const [selectedModel, setSelectedModel] = useState<string>(models[0].id)
@@ -60,7 +69,23 @@ export function ComicGeneratorForm() {
   const [generatedImages, setGeneratedImages] = useState<Record<number, string | null>>({})
   const [savedComics, setSavedComics] = useState<Array<{ title: string; theme: string; timestamp: number }>>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [isLiked, setIsLiked] = useState(false)
+  const [currentStoryId, setCurrentStoryId] = useState<string>("")
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (storyTitle && comicPanels.length > 0) {
+      const storyId = `${storyTitle}-${selectedTheme}-${Date.now()}`
+      setCurrentStoryId(storyId)
+      checkIfLiked(storyId)
+    }
+  }, [storyTitle, comicPanels])
+
+  const checkIfLiked = (storyId: string) => {
+    const likedStories = JSON.parse(localStorage.getItem("likedStories") || "[]") as LikedStory[]
+    const isStoryLiked = likedStories.some((story) => story.title === storyTitle && story.theme === selectedTheme)
+    setIsLiked(isStoryLiked)
+  }
 
   const handleGenerate = async () => {
     if (!selectedTheme) return
@@ -72,6 +97,7 @@ export function ComicGeneratorForm() {
     setStoryTitle("")
     setError("")
     setGeneratedImages({})
+    setIsLiked(false)
 
     try {
       const result = await generateComicStory(selectedTheme, selectedModel)
@@ -209,6 +235,38 @@ export function ComicGeneratorForm() {
     localStorage.setItem("comicHistory", JSON.stringify(updated))
   }
 
+  const handleLike = () => {
+    const likedStories = JSON.parse(localStorage.getItem("likedStories") || "[]") as LikedStory[]
+
+    if (isLiked) {
+      // Unlike: remove from liked stories
+      const updated = likedStories.filter((story) => !(story.title === storyTitle && story.theme === selectedTheme))
+      localStorage.setItem("likedStories", JSON.stringify(updated))
+      setIsLiked(false)
+      toast({
+        title: "Removed from favorites",
+        description: "Story removed from your liked list.",
+      })
+    } else {
+      // Like: add to liked stories
+      const newLikedStory: LikedStory = {
+        id: currentStoryId,
+        title: storyTitle,
+        theme: selectedTheme,
+        panels: comicPanels,
+        images: generatedImages,
+        timestamp: Date.now(),
+      }
+      const updated = [newLikedStory, ...likedStories]
+      localStorage.setItem("likedStories", JSON.stringify(updated))
+      setIsLiked(true)
+      toast({
+        title: "Added to favorites!",
+        description: "Story saved to your liked list.",
+      })
+    }
+  }
+
   return (
     <div className="space-y-8">
       <Card className="p-6 md:p-8 bg-white/95 border-4 border-foreground shadow-xl">
@@ -294,6 +352,17 @@ export function ComicGeneratorForm() {
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                onClick={handleLike}
+                variant={isLiked ? "default" : "outline"}
+                size="lg"
+                className={`border-2 ${
+                  isLiked ? "bg-red-500 hover:bg-red-600 text-white border-red-600" : "bg-transparent hover:bg-red-50"
+                }`}
+              >
+                <Heart className={`w-4 h-4 mr-2 ${isLiked ? "fill-current" : ""}`} />
+                {isLiked ? "Liked" : "Like Story"}
+              </Button>
               <Button onClick={handleDownload} variant="outline" size="lg" className="border-2 bg-transparent">
                 <Download className="w-4 h-4 mr-2" />
                 Download Story

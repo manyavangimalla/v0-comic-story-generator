@@ -18,7 +18,7 @@ export function ComicPanel({ panel, generatedImage }: ComicPanelProps) {
       </div>
 
       {/* Panel Content */}
-      <div className="p-6 space-y-5">
+      <div className="p-3 space-y-2">
         <div className="bg-gradient-to-br from-muted/40 to-secondary/20 p-4 rounded-2xl border-2 border-primary/20">
           <p className="text-base md:text-lg text-foreground/90 italic leading-relaxed font-serif">{panel.narrative}</p>
         </div>
