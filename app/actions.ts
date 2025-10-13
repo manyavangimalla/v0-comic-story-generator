@@ -652,38 +652,56 @@ Respond ONLY with the JSON object, no additional text.`
 
     const text = await callNvidiaAPI(prompt, nvidiaModelName)
 
-    console.log("[v0] Received response:", text.substring(0, 200))
+    console.log("[v0] Received response length:", text.length)
+    console.log("[v0] Response preview:", text.substring(0, 300))
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.error("[v0] Failed to find JSON in response, using template fallback")
-      throw new Error("No JSON found in response")
+    const firstBrace = text.indexOf("{")
+    const lastBrace = text.lastIndexOf("}")
+
+    if (firstBrace === -1 || lastBrace === -1 || firstBrace >= lastBrace) {
+      console.error("[v0] Failed to find valid JSON braces in response")
+      throw new Error("No valid JSON structure found in response")
     }
 
-    let jsonString = jsonMatch[0]
+    let jsonString = text.substring(firstBrace, lastBrace + 1)
+    console.log("[v0] Extracted JSON length:", jsonString.length)
+
     let result
 
     try {
       result = JSON.parse(jsonString)
       console.log("[v0] Successfully parsed JSON directly")
     } catch (parseError) {
-      console.log("[v0] Direct parse failed, attempting to clean JSON")
+      console.log("[v0] Direct parse failed:", parseError)
+      console.log("[v0] Attempting to clean JSON...")
 
-      jsonString = jsonString.replace(/[\x00-\x1F]/g, (char) => {
-        switch (char) {
-          case "\n":
-            return "\\n"
-          case "\r":
-            return "\\r"
-          case "\t":
-            return "\\t"
-          default:
-            return ""
-        }
-      })
+      // Replace literal newlines, tabs, and carriage returns within the JSON
+      // This regex-based approach is more careful about preserving JSON structure
+      jsonString = jsonString
+        // Remove any leading/trailing whitespace
+        .trim()
+        // Replace literal newlines with space (safer than trying to escape them)
+        .replace(/\r?\n/g, " ")
+        // Replace tabs with spaces
+        .replace(/\t/g, " ")
+        // Remove other control characters
+        .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "")
+        // Collapse multiple spaces into single space
+        .replace(/\s+/g, " ")
+        // Fix common JSON issues: remove trailing commas before } or ]
+        .replace(/,(\s*[}\]])/g, "$1")
 
-      console.log("[v0] Cleaned JSON, attempting parse again")
-      result = JSON.parse(jsonString)
+      console.log("[v0] Cleaned JSON length:", jsonString.length)
+      console.log("[v0] Cleaned JSON preview:", jsonString.substring(0, 300))
+
+      try {
+        result = JSON.parse(jsonString)
+        console.log("[v0] Successfully parsed cleaned JSON")
+      } catch (secondError) {
+        console.error("[v0] Failed to parse even after cleaning:", secondError)
+        console.error("[v0] Cleaned JSON that failed:", jsonString.substring(0, 500))
+        throw new Error("JSON parsing failed after cleaning attempt")
+      }
     }
 
     if (!result.title || !result.panels || !Array.isArray(result.panels)) {
